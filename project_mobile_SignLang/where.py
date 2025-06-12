@@ -1,10 +1,9 @@
-#where
 import cv2
 import mediapipe as mp
 import numpy as np
 import time
 
-Init mediapipe
+# Init mediapipe
 mp_hands = mp.solutions.hands
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
@@ -27,7 +26,7 @@ while True:
         break
 
     frame = cv2.flip(frame, 1)
-    h, w,  = frame.shape
+    h, w, _ = frame.shape  # ✅ แก้ไขตรงนี้
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     hands_result = hands.process(rgb)
@@ -97,6 +96,28 @@ while True:
     cv2.imshow("Where Sign Detection", frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+def detect():
+    cap = cv2.VideoCapture(0)
+    mp_hands = mp.solutions.hands.Hands()
+    success = False
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        results = mp_hands.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if results.multi_hand_landmarks:
+            success = True
+            break
+
+        cv2.imshow('ตรวจจับท่าทาง', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    return success
 
 cap.release()
 cv2.destroyAllWindows()

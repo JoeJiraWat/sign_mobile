@@ -1,416 +1,290 @@
-import os
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.button import Button
+from kivy.uix.image import Image
 from kivy.uix.label import Label
-from kivy.uix.image import Image as KivyImage
 from kivy.uix.video import Video
-from kivy.graphics.texture import Texture
 from kivy.clock import Clock
+from kivy.graphics.texture import Texture
 from kivy.lang import Builder
-from kivy.properties import BooleanProperty, StringProperty, ObjectProperty
+from kivy.core.window import Window
+from kivy.uix.anchorlayout import AnchorLayout
 
 import cv2
-import numpy as np
+import mediapipe as mp
+import time
 
-# MediaPipe components will be imported conditionally in KivyCamera
-mp_hands = None
-mp_drawing = None
-mp_drawing_styles = None
+Window.clearcolor = (1, 1, 1, 1)
 
-# KV Language String
-KV_STRING = """
-#:import FadeTransition kivy.uix.screenmanager.FadeTransition
+Builder.load_string('''
+<MainScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
 
-<BaseScreen@Screen>: # Base screen for consistent font if needed
-    font_name: 'Garuda' # Default font for Thai text
-
-<MainScreen(BaseScreen)>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: dp(50)
-        spacing: dp(20)
         Image:
-            source: 'logo.png' 
-            allow_stretch: True
-            keep_ratio: True
-            size_hint_y: 0.7
-        Button:
-            text: 'เริ่มต้นใช้งาน'
-            font_name: root.font_name
-            font_size: '20sp'
-            size_hint_y: 0.3
-            on_press: app.root.current = 'vocab_menu'
+            source: 'logo_app.png'
+            size_hint: 0.6, 0.6
+            pos_hint: {'center_x': 0.5, 'center_y': 0.6}
 
-<VocabMenuScreen(BaseScreen)>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: dp(50)
-        spacing: dp(20)
+        Button:
+            text: 'Start Learning'
+            font_size: 22
+            size_hint: 0.4, 0.12
+            pos_hint: {'center_x': 0.5, 'y': 0.1}
+            background_normal: ''
+            background_color: 0.1, 0.2, 0.6, 1  # น้ำเงินเข้ม
+            border: [20, 20, 20, 20]
+            on_release:
+                app.root.current = 'vocab'
+
+<VocabScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: '<'
+            font_size: 50
+            size_hint: 0.18, 0.08
+            pos_hint: {'x': 0.02, 'top': 0.98}
+            background_normal: ''
+            background_color: 1, 1, 1, 1  # ขาว
+            color: 0, 0, 0, 1
+            border: [20, 20, 20, 20]
+            on_release:
+                app.root.current = 'main'
+
         Label:
-            text: 'เมนูหลัก'
-            font_name: root.font_name
-            font_size: '30sp'
-            size_hint_y: 0.2
-        Button:
-            text: 'คำศัพท์'
-            font_name: root.font_name
-            font_size: '20sp'
-            size_hint_y: 0.4
-            on_press: app.root.current = 'word_selection'
-        Button:
-            text: 'กลับหน้าแรก'
-            font_name: root.font_name
-            font_size: '18sp'
-            size_hint_y: 0.2
-            on_press: app.root.current = 'main'
+            text: 'Choose Vocabulary'
+            font_size: 30
+            color: 0, 0, 0.2, 1
+            size_hint: None, None
+            size: self.texture_size
+            pos_hint: {'center_x': 0.5, 'top': 0.88}
 
-
-<WordSelectionScreen(BaseScreen)>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: dp(30)
-        spacing: dp(15)
-        Label:
-            text: 'เลือกคำศัพท์'
-            font_name: root.font_name
-            font_size: '30sp'
-            size_hint_y: 0.2
         Button:
-            text: 'ที่ไหน'
-            font_name: root.font_name
-            font_size: '20sp'
-            size_hint_y: 0.3
-            on_press: app.select_word('ที่ไหน')
-        Button:
-            text: 'สวย'
-            font_name: root.font_name
-            font_size: '20sp'
-            size_hint_y: 0.3
-            on_press: app.select_word('สวย')
-        Button:
-            text: 'กลับเมนูหลัก'
-            font_name: root.font_name
-            font_size: '18sp'
-            size_hint_y: 0.15
-            on_press: app.root.current = 'vocab_menu'
+            text: 'Where'
+            font_size: 22
+            size_hint: 0.4, 0.12
+            pos_hint: {'center_x': 0.5, 'center_y': 0.55}
+            background_normal: ''
+            background_color: 0.1, 0.2, 0.6, 1
+            border: [20, 20, 20, 20]
+            on_release:
+                root.manager.get_screen('video').word = 'where'
+                root.manager.current = 'video'
 
-<LearningScreen(BaseScreen)>:
-    video_player: video_player
-    kivy_camera: kivy_camera
-    status_label: status_label
-    next_button: next_button
-    back_to_menu_button: back_to_menu_button
+        Button:
+            text: 'Beautiful'
+            font_size: 22
+            size_hint: 0.4, 0.12
+            pos_hint: {'center_x': 0.5, 'center_y': 0.38}
+            background_normal: ''
+            background_color: 0.1, 0.2, 0.6, 1
+            border: [20, 20, 20, 20]
+            on_release:
+                root.manager.get_screen('video').word = 'beautiful'
+                root.manager.current = 'video'
 
-    BoxLayout:
-        orientation: 'vertical'
-        padding: dp(10)
-        spacing: dp(10)
+<VideoScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+
+        Button:
+            text: '<'
+            font_size: 50
+            size_hint: 0.18, 0.08
+            pos_hint: {'x': 0.02, 'top': 0.98}
+            background_normal: ''
+            background_color: 1, 1, 1, 1
+            color: 0, 0, 0, 1
+            border: [20, 20, 20, 20]
+            on_release:
+                app.root.current = 'vocab'
 
         Video:
-            id: video_player
-            source: root.video_source
-            state: 'stop'
-            options: {'eos': 'stop'} 
+            id: vid
+            source: ''
+            state: 'play'
+            options: {'eos': 'loop'}
             allow_stretch: True
-            size_hint_y: 0.6 if root.show_video_player else 0
-            opacity: 1 if root.show_video_player else 0
-            on_eos: root.on_video_end()
-
-        KivyCamera:
-            id: kivy_camera
-            size_hint_y: 0.6 if root.show_camera_view else 0
-            opacity: 1 if root.show_camera_view else 0
-            on_sign_detected: root.on_sign_recognized_event() # Connect event
+            size_hint: 0.95, 0.5
+            pos_hint: {'center_x': 0.5, 'top': 0.88}
 
         Label:
-            id: status_label
-            text: root.status_message
-            font_name: root.font_name
-            font_size: '24sp'
-            size_hint_y: 0.1 if root.status_message else 0
-            opacity: 1 if root.status_message else 0
-            halign: 'center'
+            id: pass_label
+            text: ''
+            font_size: 40
+            bold: True
+            color: 0, 1, 0, 1
+            size_hint: None, None
+            size: self.texture_size
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
 
-        Button:
-            id: next_button
-            text: 'ถัดไป'
-            font_name: root.font_name
-            font_size: '20sp'
-            on_press: root.prepare_for_camera()
-            size_hint_y: 0.15
-            opacity: 1 if root.show_next_button else 0
-            disabled: not root.show_next_button
+        Image:
+            id: cam
+            allow_stretch: True
+            keep_ratio: True
+            size_hint: 0.95, 0.35
+            pos_hint: {'center_x': 0.5, 'y': 0.12}
 
-        Button:
-            id: back_to_menu_button
-            text: 'กลับไปหน้าคำศัพท์'
-            font_name: root.font_name
-            font_size: '20sp'
-            on_press: root.go_to_word_selection()
-            size_hint_y: 0.15
-            opacity: 1 if root.show_back_button else 0
-            disabled: not root.show_back_button
-"""
+        BoxLayout:
+            orientation: 'horizontal'
+            spacing: 10
+            size_hint: 0.85, 0.08
+            pos_hint: {'center_x': 0.5, 'y': 0.02}
 
-class KivyCamera(KivyImage):
-    __events__ = ('on_sign_detected',) # Declare the event
+            Button:
+                text: 'Start Detection'
+                font_size: 18
+                background_normal: ''
+                background_color: 0.1, 0.2, 0.6, 1
+                border: [20, 20, 20, 20]
+                on_release:
+                    root.start_detection()
 
-    def __init__(self, **kwargs):
-        super(KivyCamera, self).__init__(**kwargs)
-        self.capture = None
-        self.hands_detector = None
-        self.fps = 20
-        self.is_active = False
-        self._initialize_mediapipe()
-
-    def _initialize_mediapipe(self):
-        global mp_hands, mp_drawing, mp_drawing_styles
-        if mp_hands is None: # Initialize only once
-            try:
-                import mediapipe as mp
-                mp_hands = mp.solutions.hands
-                mp_drawing = mp.solutions.drawing_utils
-                mp_drawing_styles = mp.solutions.drawing_styles
-                print("MediaPipe initialized successfully.")
-            except ImportError:
-                print("Failed to import MediaPipe. Hand tracking will not be available.")
-                mp_hands = "Error" # Mark as error
-            except Exception as e:
-                print(f"Error initializing MediaPipe components: {e}")
-                mp_hands = "Error"
-
-
-        if mp_hands != "Error" and self.hands_detector is None:
-            try:
-                self.hands_detector = mp_hands.Hands(
-                    model_complexity=0,
-                    min_detection_confidence=0.5,
-                    min_tracking_confidence=0.5)
-                print("MediaPipe Hands detector created.")
-            except Exception as e:
-                print(f"Failed to create MediaPipe Hands detector: {e}")
-                self.hands_detector = "Error"
-
-
-    def start(self):
-        if self.hands_detector is None or self.hands_detector == "Error":
-            self._initialize_mediapipe() # Try to initialize again if it failed
-            if self.hands_detector is None or self.hands_detector == "Error":
-                print("MediaPipe Hands detector not available. Cannot start camera for hand tracking.")
-                return False
-
-        if self.capture is None:
-            self.capture = cv2.VideoCapture(0)
-            if not self.capture.isOpened():
-                # Try other camera indices
-                for i in range(1, 4):
-                    self.capture = cv2.VideoCapture(i)
-                    if self.capture.isOpened(): break
-                if not self.capture.isOpened():
-                    print("Cannot open camera.")
-                    self.capture = None
-                    return False
-        self.is_active = True
-        Clock.schedule_interval(self.update, 1.0 / self.fps)
-        print("KivyCamera started.")
-        return True
-
-    def stop(self):
-        self.is_active = False
-        Clock.unschedule(self.update)
-        if self.capture:
-            self.capture.release()
-            self.capture = None
-        # self.texture = None # Avoid clearing texture to prevent black flicker if widget is still visible
-        print("KivyCamera stopped.")
-
-    def update(self, dt):
-        if not self.is_active or not self.capture or not self.capture.isOpened() or \
-           self.hands_detector is None or self.hands_detector == "Error":
-            return
-
-        ret, frame = self.capture.read()
-        if not ret:
-            return
-
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_rgb.flags.writeable = False
-        results = self.hands_detector.process(frame_rgb)
-        frame_rgb.flags.writeable = True
-
-        recognized_correctly = False
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                if mp_drawing: # Check if drawing utils are available
-                    mp_drawing.draw_landmarks(
-                        frame_rgb,
-                        hand_landmarks,
-                        mp_hands.HAND_CONNECTIONS,
-                        mp_drawing_styles.get_default_hand_landmarks_style(),
-                        mp_drawing_styles.get_default_hand_connections_style())
-            recognized_correctly = True # SIMULATED: Any hand detected is "correct"
-
-        # Mirror effect (horizontal flip)
-        mirrored_frame_rgb = cv2.flip(frame_rgb, 1)
-        # Convert back to BGR for Kivy texture
-        processed_frame_bgr = cv2.cvtColor(mirrored_frame_rgb, cv2.COLOR_RGB2BGR)
-        # Vertical flip for Kivy texture orientation
-        buf = cv2.flip(processed_frame_bgr, 0).tobytes()
-
-        image_texture = Texture.create(
-            size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
-        image_texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
-        self.texture = image_texture
-
-        if recognized_correctly:
-            self.dispatch('on_sign_detected') # Dispatch the event
-
-    def on_sign_detected(self, *args):
-        # This is an event handler that Kivy calls when dispatch('on_sign_detected') is used.
-        # It's here so Kivy recognizes the event. The actual logic is in LearningScreen.
-        pass
+            Button:
+                text: 'Replay'
+                font_size: 18
+                background_normal: ''
+                background_color: 0.1, 0.2, 0.6, 1
+                border: [20, 20, 20, 20]
+                on_release:
+                    root.replay_video()
+''')
 
 class MainScreen(Screen):
     pass
 
-class VocabMenuScreen(Screen):
+class VocabScreen(Screen):
     pass
 
-class WordSelectionScreen(Screen):
-    pass
+class VideoScreen(Screen):
+    word = ''
+    detecting = False
 
-class LearningScreen(Screen):
-    current_word = StringProperty("")
-    video_source = StringProperty("")
-    status_message = StringProperty("")
 
-    show_video_player = BooleanProperty(True)
-    show_camera_view = BooleanProperty(False)
-    show_next_button = BooleanProperty(True)
-    show_back_button = BooleanProperty(False)
+    def on_enter(self):
+        self.ids.vid.source = f'{self.word}.mp4'
+        self.ids.vid.state = 'play'
+        self.ids.pass_label.text = ''
+        self.detecting = False
 
-    video_player = ObjectProperty(None)
-    kivy_camera = ObjectProperty(None)
-    status_label = ObjectProperty(None)
-    next_button = ObjectProperty(None)
-    back_to_menu_button = ObjectProperty(None)
+    def replay_video(self):
+        self.ids.vid.state = 'stop'
+        self.ids.vid.position = 0
+        self.ids.vid.state = 'play'
 
-    video_paths = {
-        "ที่ไหน": "video_where.mp4",
-        "สวย": "video_beautiful.mp4",
-        "default": "default.mp4" # Fallback video
-    }
+    def start_detection(self):
+        if not self.detecting:
+            self.ids.vid.state = 'stop'
+            self.detecting = True
+            self.ids.pass_label.text = ''
+            self.capture = cv2.VideoCapture(0)
+            self.success = False
+            self.phase = 0
+            self.prev_x = None
+            self.sway_start_time = None
+            self.start_time = None
+            self.hands = mp.solutions.hands.Hands(max_num_hands=2, min_detection_confidence=0.7)
+            self.pose = mp.solutions.pose.Pose()
+            Clock.schedule_interval(self.update, 1.0 / 30)
 
-    def on_enter(self, *args):
-        super().on_enter(*args)
-        self.status_message = ""
-        self.show_video_player = True
-        self.show_camera_view = False
-        self.show_next_button = True
-        self.show_back_button = False
-
-        if self.kivy_camera:
-            self.kivy_camera.stop()
-
-        self.video_source = self.video_paths.get(self.current_word, self.video_paths["default"])
-        if self.video_player:
-            self.video_player.state = 'play'
-        print(f"LearningScreen: Entering for word '{self.current_word}', video: {self.video_source}")
-
-    def on_video_end(self, *args):
-        print(f"Video '{self.video_source}' ended.")
-        self.show_next_button = True # Ensure next button is active
-
-    def prepare_for_camera(self):
-        print("LearningScreen: prepare_for_camera called")
-        if self.video_player:
-            self.video_player.state = 'stop'
-        self.show_video_player = False
-        self.show_next_button = False
-
-        self.show_camera_view = True
-        if self.kivy_camera:
-            if not self.kivy_camera.start():
-                self.status_message = "ไม่สามารถเปิดกล้องได้"
-                self.show_camera_view = False
-                self.show_back_button = True # Allow user to go back
-                return
-            self.status_message = "กรุณาทำท่าทางตามวิดีโอ"
-        else:
-            self.status_message = "ส่วนแสดงผลกล้องยังไม่พร้อม"
-            self.show_back_button = True # Allow user to go back
-
-    def on_sign_recognized_event(self, *args): # Renamed to avoid conflict if Kivy uses on_sign_recognized
-        if self.status_message == "ผ่าน!":
+    def update(self, dt):
+        ret, frame = self.capture.read()
+        if not ret:
             return
 
-        print("LearningScreen: Sign recognized event triggered!")
-        self.status_message = "ผ่าน!"
-        if self.kivy_camera:
-            self.kivy_camera.stop()
-        # self.show_camera_view = False # Optionally hide camera
-        self.show_back_button = True
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        hands_result = self.hands.process(rgb)
+        pose_result = self.pose.process(rgb)
 
-    def go_to_word_selection(self, *args):
-        if self.kivy_camera:
-            self.kivy_camera.stop()
-        self.manager.current = 'word_selection'
+        if self.start_time is None:
+            self.start_time = time.time()
 
-    def on_leave(self, *args):
-        super().on_leave(*args)
-        print(f"LearningScreen: Leaving screen for word '{self.current_word}'")
-        if self.video_player:
-            self.video_player.state = 'stop'
-            self.video_source = ""
-        if self.kivy_camera:
-            self.kivy_camera.stop()
-        self.status_message = ""
+        chest_y = None
+        if pose_result.pose_landmarks:
+            l_shoulder = pose_result.pose_landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER]
+            r_shoulder = pose_result.pose_landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]
+            chest_y = int(((l_shoulder.y + r_shoulder.y) / 2) * h)
 
+        if hands_result.multi_hand_landmarks and len(hands_result.multi_hand_landmarks) == 2:
+            coords = []
+            for handLms in hands_result.multi_hand_landmarks:
+                index_tip = handLms.landmark[mp.solutions.hands.HandLandmark.INDEX_FINGER_TIP]
+                cx, cy = int(index_tip.x * w), int(index_tip.y * h)
+                coords.append((cx, cy))
+            coords.sort(key=lambda x: x[0])
+            left_index, right_index = coords
 
-class SignLanguageApp(App):
+            if self.phase == 0:
+                if chest_y and left_index[1] < chest_y and right_index[1] < chest_y:
+                    self.phase = 1
+            elif self.phase == 1:
+                vertical_dist = abs(left_index[1] - right_index[1])
+                horizontal_dist = abs(left_index[0] - right_index[0])
+                if vertical_dist < 40 and horizontal_dist < 40:
+                    self.phase = 2
+                    self.sway_start_time = None
+                    self.prev_x = None
+            elif self.phase == 2:
+                movement_detected = False
+                if self.prev_x is not None:
+                    dx = abs(self.prev_x - right_index[0])
+                    if dx > 10:
+                        movement_detected = True
+
+                if movement_detected:
+                    if self.sway_start_time is None:
+                        self.sway_start_time = time.time()
+                    elif time.time() - self.sway_start_time >= 1.0:
+                        self.success = True
+                        self.stop_detection()
+                else:
+                    self.sway_start_time = None
+
+                self.prev_x = right_index[0]
+
+        # Show camera
+        buf = cv2.flip(frame, 0).tobytes()
+        texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt='bgr')
+        texture.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+        self.ids.cam.texture = texture
+
+    def stop_detection(self):
+        Clock.unschedule(self.update)
+        self.capture.release()
+        self.detecting = False
+        self.ids.cam.texture = None
+        self.ids.pass_label.text = "✅ PASSED"
+        print("✅ Passed!")
+        Clock.schedule_once(lambda dt: setattr(self.manager, 'current', 'main'), 2)
+
+class SignApp(App):
     def build(self):
-        Builder.load_string(KV_STRING)
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MainScreen(name='main'))
-        sm.add_widget(VocabMenuScreen(name='vocab_menu'))
-        sm.add_widget(WordSelectionScreen(name='word_selection'))
-        sm.add_widget(LearningScreen(name='learning'))
+        sm.add_widget(VocabScreen(name='vocab'))
+        sm.add_widget(VideoScreen(name='video'))
         return sm
 
-    def select_word(self, word):
-        learning_screen = self.root.get_screen('learning')
-        learning_screen.current_word = word
-        self.root.current = 'learning'
-
-def create_dummy_files():
-    # Create a simple placeholder logo.png if it doesn't exist
-    if not os.path.exists("logo.png"):
-        try:
-            from PIL import Image, ImageDraw
-            img = Image.new('RGB', (200, 100), color = (73, 109, 137))
-            d = ImageDraw.Draw(img)
-            d.text((50,30), "LOGO", fill=(255,255,0), font_size=40)
-            img.save('logo.png')
-            print("Created dummy logo.png")
-        except ImportError:
-            print("Pillow library not found. Cannot create dummy logo.png. Please create 'logo.png' manually.")
-        except Exception as e:
-            print(f"Error creating dummy logo.png: {e}")
-
-    # Create dummy video files if they don't exist
-    dummy_video_files = ["video_where.mp4", "video_beautiful.mp4", "default.mp4"]
-    for vid_file in dummy_video_files:
-        if not os.path.exists(vid_file):
-            try:
-                with open(vid_file, 'w') as f:
-                    f.write("") # Create an empty file
-                print(f"Created dummy video file: {vid_file} (This is an empty file, replace with actual video)")
-            except Exception as e:
-                print(f"Error creating dummy video file {vid_file}: {e}")
-
-
 if __name__ == '__main__':
-    create_dummy_files()
-    SignLanguageApp().run()
+    SignApp().run()
